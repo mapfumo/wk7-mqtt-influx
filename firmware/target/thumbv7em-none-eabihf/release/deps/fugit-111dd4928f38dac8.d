@@ -1,0 +1,12 @@
+/home/tony/dev/4-month-plan/wk7-mqtt-influx/firmware/target/thumbv7em-none-eabihf/release/deps/fugit-111dd4928f38dac8.d: /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/lib.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/aliases.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/duration.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/helpers.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/instant.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/rate.rs
+
+/home/tony/dev/4-month-plan/wk7-mqtt-influx/firmware/target/thumbv7em-none-eabihf/release/deps/libfugit-111dd4928f38dac8.rlib: /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/lib.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/aliases.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/duration.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/helpers.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/instant.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/rate.rs
+
+/home/tony/dev/4-month-plan/wk7-mqtt-influx/firmware/target/thumbv7em-none-eabihf/release/deps/libfugit-111dd4928f38dac8.rmeta: /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/lib.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/aliases.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/duration.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/helpers.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/instant.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/rate.rs
+
+/home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/lib.rs:
+/home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/aliases.rs:
+/home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/duration.rs:
+/home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/helpers.rs:
+/home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/instant.rs:
+/home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fugit-0.3.9/src/rate.rs:

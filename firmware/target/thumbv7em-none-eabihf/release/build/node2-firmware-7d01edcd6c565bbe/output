@@ -1,0 +1,2 @@
+cargo:rustc-link-search=/home/tony/dev/4-month-plan/wk7-mqtt-influx/firmware/target/thumbv7em-none-eabihf/release/build/node2-firmware-7d01edcd6c565bbe/out
+cargo:rerun-if-changed=memory.x

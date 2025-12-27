@@ -1,0 +1,11 @@
+/home/tony/dev/4-month-plan/wk7-mqtt-influx/firmware/target/thumbv7em-none-eabihf/release/deps/shared_bus-506303045865fe76.d: /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/lib.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/macros.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/manager.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/mutex.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/proxies.rs
+
+/home/tony/dev/4-month-plan/wk7-mqtt-influx/firmware/target/thumbv7em-none-eabihf/release/deps/libshared_bus-506303045865fe76.rlib: /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/lib.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/macros.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/manager.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/mutex.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/proxies.rs
+
+/home/tony/dev/4-month-plan/wk7-mqtt-influx/firmware/target/thumbv7em-none-eabihf/release/deps/libshared_bus-506303045865fe76.rmeta: /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/lib.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/macros.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/manager.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/mutex.rs /home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/proxies.rs
+
+/home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/lib.rs:
+/home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/macros.rs:
+/home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/manager.rs:
+/home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/mutex.rs:
+/home/tony/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/shared-bus-0.3.1/src/proxies.rs:

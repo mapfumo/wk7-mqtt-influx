@@ -1,0 +1,1 @@
+/home/tony/dev/4-month-plan/wk7-mqtt-influx/firmware/target/thumbv7em-none-eabihf/release/node2-firmware: /home/tony/dev/4-month-plan/wk7-mqtt-influx/firmware/build.rs /home/tony/dev/4-month-plan/wk7-mqtt-influx/firmware/memory.x /home/tony/dev/4-month-plan/wk7-mqtt-influx/firmware/src/main.rs

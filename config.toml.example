@@ -1,0 +1,33 @@
+# Week 7 MQTT + InfluxDB Gateway Configuration
+# Copy this file to config.toml and update with your settings
+
+[mqtt]
+# MQTT broker connection
+broker_url = "mqtt://localhost:1883"
+# Unique client identifier
+client_id = "iiot-gateway"
+# Topic prefix for all telemetry data
+topic_prefix = "iiot"
+# Quality of Service level (0, 1, or 2)
+# 0 = At most once, 1 = At least once, 2 = Exactly once
+qos = 1
+
+[influxdb]
+# InfluxDB 2.x server URL
+url = "http://localhost:8086"
+# Organization name
+org = "my-org"
+# Bucket name for telemetry data
+bucket = "telemetry"
+# Authentication token (override with env var: INFLUXDB_TOKEN)
+token = "YOUR_TOKEN_HERE"
+
+[gateway]
+# ST-Link probe ID for Node 2
+probe_id = "0483:374b:066DFF3833584B3043115433"
+# STM32 chip identifier
+chip = "STM32F446RETx"
+# Path to Node 2 firmware binary
+firmware_path = "target/thumbv7em-none-eabihf/release/node2-firmware"
+# Telemetry channel capacity (for backpressure)
+channel_capacity = 100

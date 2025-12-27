@@ -1,0 +1,36 @@
+[package]
+name = "wk7-mqtt-influx"
+version = "0.1.0"
+edition = "2021"
+authors = ["Antony (Tony) Mapfumo"]
+license = "MIT"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.42", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1.0"
+
+# MQTT client (Week 7)
+rumqttc = "0.24"
+
+# InfluxDB client (Week 7)
+influxdb2 = "0.5"
+
+# Configuration file parsing (Week 7)
+toml = "0.8"
+
+# HTTP client (for InfluxDB health check)
+reqwest = "0.12"
+
+# Futures utilities
+futures = "0.3"

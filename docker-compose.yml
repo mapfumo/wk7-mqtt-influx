@@ -1,0 +1,41 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: wk7-mosquitto
+    ports:
+      - "1883:1883"      # MQTT port
+      - "9001:9001"      # WebSocket port (optional, for future use)
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    restart: unless-stopped
+    networks:
+      - iiot-network
+
+  influxdb:
+    image: influxdb:2
+    container_name: wk7-influxdb
+    ports:
+      - "8086:8086"      # InfluxDB HTTP API
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin123456
+      - DOCKER_INFLUXDB_INIT_ORG=my-org
+      - DOCKER_INFLUXDB_INIT_BUCKET=telemetry
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=my-super-secret-auth-token
+    restart: unless-stopped
+    networks:
+      - iiot-network
+
+networks:
+  iiot-network:
+    driver: bridge
+
+volumes:
+  influxdb-data:
+  influxdb-config:
