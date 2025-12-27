@@ -1,4 +1,5 @@
 /target
 /mosquitto/log/
 /firmware/target
-
+/firmware/target/
+/firmware/target/release/
