@@ -1,5 +1,8 @@
 /target
 /mosquitto/log/
+/mosquitto/data/
 /firmware/target
 /firmware/target/
 /firmware/target/release/
+mosquitto/data/mosquitto.db
+/mosquitto/data/mosquitto.db
