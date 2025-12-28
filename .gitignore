@@ -6,3 +6,6 @@
 /firmware/target/release/
 mosquitto/data/mosquitto.db
 /mosquitto/data/mosquitto.db
+mosquitto/data/
+mosquitto/log/
+*.db

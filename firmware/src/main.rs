@@ -28,8 +28,8 @@ mod app {
     use shared_bus::CortexMMutex;
     use ssd1306::{mode::BufferedGraphicsMode, prelude::*, Ssd1306};
 
-    // Week 5: BMP280 sensor imports
-    use bmp280_ehal::BMP280;
+    // Week 5: SHT3x sensor imports for Node 2 local sensor (temperature & humidity)
+    use sht3x::{SHT3x, Repeatability, Address as ShtAddress};
 
     // --- Configuration Constants ---
     const NODE_ID: &str = "N2"; // Node identifier for display
@@ -180,6 +180,9 @@ mod app {
         pub packet_num: u16,
     }
 
+    // Type alias for SHT3x delay provider (using TIM5 for 1MHz clock)
+    type ShtDelay = stm32f4xx_hal::timer::Delay<pac::TIM5, 1000000>;
+
     #[shared]
     struct Shared {
         lora_uart: Serial<pac::UART4>,
@@ -188,9 +191,10 @@ mod app {
         last_packet: Option<ParsedMessage>,
         packets_received: u32,
         crc_errors: u32,                  // Week 5: Track CRC validation failures
-        bmp280: Option<BMP280<I2cProxy>>, // Week 5: Gateway local sensor (optional if not wired)
+        sht3x: Option<SHT3x<I2cProxy, ShtDelay>>,   // Week 5: Gateway local sensor SHT3x (temperature & humidity)
+        sht3x_skip_reads: u8,             // Skip first N reads to allow sensor to stabilize
         gateway_temp: Option<f32>,        // Week 5: Local temperature
-        gateway_pressure: Option<f32>,    // Week 5: Local pressure
+        gateway_humidity: Option<f32>,    // Week 5: Local humidity (SHT3x instead of pressure)
         uptime_ms: u32,                   // Week 5: Milliseconds since boot (shared between tasks)
     }
 
@@ -335,19 +339,16 @@ mod app {
 
         defmt::info!("USART2 VCP initialized at 115200 baud");
 
-        // --- Week 5: BMP280 Sensor Initialization ---
-        // Try to initialize BMP280, but don't panic if it fails (sensor may not be wired)
-        defmt::info!("Initializing BMP280 sensor...");
-        let bmp = match BMP280::new(bus.acquire_i2c()) {
-            Ok(sensor) => {
-                defmt::info!("BMP280 found at 0x76!");
-                Some(sensor)
-            }
-            Err(_) => {
-                defmt::warn!("BMP280 not found - continuing as bridge without local sensor");
-                None
-            }
-        };
+        // --- Week 5: SHT3x Sensor Initialization ---
+        // SHT3x provides temperature and humidity for Node 2 (gateway) local readings
+        defmt::info!("Initializing SHT3x sensor...");
+
+        // Create delay provider for SHT3x (using TIM5 at 1MHz)
+        let sht_delay = dp.TIM5.delay_us(&mut rcc);
+
+        // Create SHT3x sensor (same as used on Node 1) at default address 0x44
+        let sht3x_sensor = SHT3x::new(bus.acquire_i2c(), sht_delay, ShtAddress::Low);
+        defmt::info!("SHT3x initialized at 0x44");
 
         // --- Timer for LED blinking and display updates ---
         let mut timer = dp.TIM2.counter_hz(&mut rcc);
@@ -362,9 +363,10 @@ mod app {
                 last_packet: None,
                 packets_received: 0,
                 crc_errors: 0,
-                bmp280: bmp,
+                sht3x: Some(sht3x_sensor),
+                sht3x_skip_reads: 4,  // Skip first 4 reads (2 seconds) to allow sensor to settle
                 gateway_temp: None,
-                gateway_pressure: None,
+                gateway_humidity: None,
                 uptime_ms: 0,
             },
             Local {
@@ -376,7 +378,7 @@ mod app {
         )
     }
 
-    #[task(binds = TIM2, shared = [display, last_packet, packets_received, bmp280, gateway_temp, gateway_pressure, uptime_ms], local = [led, timer])]
+    #[task(binds = TIM2, shared = [display, last_packet, packets_received, sht3x, sht3x_skip_reads, gateway_temp, gateway_humidity, uptime_ms], local = [led, timer])]
     fn tim2_handler(mut cx: tim2_handler::Context) {
         cx.local
             .timer
@@ -386,23 +388,37 @@ mod app {
         // Increment uptime (timer runs at 2 Hz, so 500ms per tick)
         cx.shared.uptime_ms.lock(|uptime| *uptime += 500);
 
-        // Read BMP280 sensor (gateway local sensor)
-        cx.shared.bmp280.lock(|bmp_opt| {
-            if let Some(bmp) = bmp_opt {
-                // Read temperature and pressure from BMP280
-                let temp = bmp.temp() as f32;      // Convert f64 to f32
-                let pressure = bmp.pressure() as f32;  // Pressure in Pa
-
-                // Convert pressure from Pa to hPa (more common for weather)
-                let pressure_hpa = pressure / 100.0;
-
-                // Store in shared state
-                cx.shared.gateway_temp.lock(|t| *t = Some(temp));
-                cx.shared.gateway_pressure.lock(|p| *p = Some(pressure_hpa));
-
-                defmt::debug!("BMP280 read: T={}°C, P={}hPa", temp, pressure_hpa);
+        // Read SHT3x sensor (gateway local sensor - temperature & humidity)
+        // Skip first few reads to allow sensor to complete initial measurements
+        let should_read = cx.shared.sht3x_skip_reads.lock(|skip| {
+            if *skip > 0 {
+                *skip -= 1;
+                false
+            } else {
+                true
             }
         });
+
+        if should_read {
+            cx.shared.sht3x.lock(|sht_opt| {
+                if let Some(sht) = sht_opt {
+                    // Read temperature and humidity from SHT3x
+                    // High repeatability measurement (same as Node 1)
+                    if let Ok(measurement) = sht.measure(Repeatability::High) {
+                        // Convert raw values to actual temperature (°C) and humidity (%)
+                        // SHT3x returns values scaled by 100
+                        let temp = measurement.temperature as f32 / 100.0;
+                        let humidity = measurement.humidity as f32 / 100.0;
+
+                        // Store in shared state
+                        cx.shared.gateway_temp.lock(|t| *t = Some(temp));
+                        cx.shared.gateway_humidity.lock(|h| *h = Some(humidity));
+
+                        defmt::info!("SHT3x read: T={}°C, H={}%", temp, humidity);
+                    }
+                }
+            });
+        }
 
         // Copy packet data quickly while holding lock
         let packet_copy = cx.shared.last_packet.lock(|pkt_opt| *pkt_opt);
@@ -482,7 +498,7 @@ mod app {
     // 4. Clear buffer for next message
     //
     // NO display updates here - those happen in the timer interrupt
-    #[task(binds = UART4, shared = [lora_uart, vcp_uart, last_packet, packets_received, crc_errors, gateway_temp, gateway_pressure, uptime_ms], local = [rx_buffer])]
+    #[task(binds = UART4, shared = [lora_uart, vcp_uart, last_packet, packets_received, crc_errors, gateway_temp, gateway_humidity, uptime_ms], local = [rx_buffer])]
     fn uart4_handler(mut cx: uart4_handler::Context) {
         // FIRST: Clear any UART error flags (ORE, FE, NE) that would block reception
         let uart_ptr = unsafe { &*pac::UART4::ptr() };
@@ -569,10 +585,10 @@ mod app {
                 let total = cx.shared.packets_received.lock(|c| *c);
                 let errors = cx.shared.crc_errors.lock(|e| *e);
                 let gw_temp = cx.shared.gateway_temp.lock(|t| *t);
-                let gw_press = cx.shared.gateway_pressure.lock(|p| *p);
+                let gw_humidity = cx.shared.gateway_humidity.lock(|h| *h);
 
                 let json =
-                    format_json_telemetry(&parsed, timestamp, total, errors, gw_temp, gw_press);
+                    format_json_telemetry(&parsed, timestamp, total, errors, gw_temp, gw_humidity);
 
                 // Write JSON to USART2 (ST-Link VCP)
                 cx.shared.vcp_uart.lock(|uart| {
@@ -711,7 +727,7 @@ mod app {
         packets_received: u32,
         crc_errors: u32,
         gateway_temp: Option<f32>,
-        gateway_pressure: Option<f32>,
+        gateway_humidity: Option<f32>,
     ) -> heapless::String<512> {
         use core::fmt::Write;
         let mut json = heapless::String::<512>::new();
@@ -731,16 +747,16 @@ mod app {
         let _ = write!(json, "\"g\":{}", gas);
         let _ = write!(json, "}},");
 
-        // Node 2 (gateway) sensor data (BMP280 local sensor)
+        // Node 2 (gateway) sensor data (SHT3x local sensor - temperature & humidity)
         let _ = write!(json, "\"n2\":{{");
         if let Some(t) = gateway_temp {
             let _ = write!(json, "\"t\":{:.1}", t);
-            if gateway_pressure.is_some() {
+            if gateway_humidity.is_some() {
                 let _ = write!(json, ",");
             }
         }
-        if let Some(p) = gateway_pressure {
-            let _ = write!(json, "\"p\":{:.2}", p);
+        if let Some(h) = gateway_humidity {
+            let _ = write!(json, "\"h\":{:.1}", h);
         }
         let _ = write!(json, "}},");
 

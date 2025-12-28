@@ -23,7 +23,7 @@ embedded-hal-0-2 = { package = "embedded-hal", version = "0.2.7" }
 ssd1306 = "0.8.4"
 display-interface-i2c = "0.4"
 embedded-graphics = "0.8.1"
-bmp280-ehal = "0.0.6"
+sht3x = "0.1"  # SHT3x sensor (temperature, humidity)
 
 heapless = "0.8"
 nb = "1.1"

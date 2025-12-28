@@ -17,10 +17,10 @@
         :: BinaryColor, prelude :: * , text :: Text,
     }; use heapless :: { String, Vec }; use shared_bus :: CortexMMutex; use
     ssd1306 :: { mode :: BufferedGraphicsMode, prelude :: * , Ssd1306 }; use
-    bmp280_ehal :: BMP280; use serde :: { Deserialize, Serialize };
-    #[doc = r" User code from within the module"] const NODE_ID : & str =
-    "N2"; const RX_BUFFER_SIZE : usize = 255; const NETWORK_ID : u8 = 18;
-    const LORA_FREQ : u32 = 915;
+    sht3x :: { SHT3x, Repeatability, Address as ShtAddress }; use serde ::
+    { Deserialize, Serialize }; #[doc = r" User code from within the module"]
+    const NODE_ID : & str = "N2"; const RX_BUFFER_SIZE : usize = 255; const
+    NETWORK_ID : u8 = 18; const LORA_FREQ : u32 = 915;
     #[doc = " Sensor data packet for binary transmission (must match Node 1)"]
     #[derive(Debug, Clone, Copy, Serialize, Deserialize)] pub struct
     SensorDataPacket
@@ -95,7 +95,8 @@
     {
         pub temperature : f32, pub humidity : f32, pub gas_resistance : u32,
         pub packet_num : u16,
-    } #[derive(Debug, Clone, Copy)] pub struct ParsedMessage
+    } type ShtDelay = stm32f4xx_hal :: timer :: Delay < pac :: TIM5, 1000000 >
+    ; #[derive(Debug, Clone, Copy)] pub struct ParsedMessage
     { pub sensor_data : SensorData, pub rssi : i16, pub snr : i16, } fn
     send_at_command(uart : & mut Serial < pac :: UART4 > , cmd : & str)
     {
@@ -169,7 +170,7 @@
     #[doc = " Returns newline-delimited JSON (NDJSON format)"] fn
     format_json_telemetry(parsed : & ParsedMessage, timestamp_ms : u32,
     packets_received : u32, crc_errors : u32, gateway_temp : Option < f32 > ,
-    gateway_pressure : Option < f32 > ,) -> heapless :: String < 512 >
+    gateway_humidity : Option < f32 > ,) -> heapless :: String < 512 >
     {
         use core :: fmt :: Write; let mut json = heapless :: String :: < 512 >
         :: new(); let _ = write! (json, "{{\"ts\":{},", timestamp_ms); let _ =
@@ -182,9 +183,9 @@
         (json, "\"n2\":{{"); if let Some(t) = gateway_temp
         {
             let _ = write! (json, "\"t\":{:.1}", t); if
-            gateway_pressure.is_some() { let _ = write! (json, ","); }
-        } if let Some(p) = gateway_pressure
-        { let _ = write! (json, "\"p\":{:.2}", p); } let _ = write!
+            gateway_humidity.is_some() { let _ = write! (json, ","); }
+        } if let Some(h) = gateway_humidity
+        { let _ = write! (json, "\"h\":{:.1}", h); } let _ = write!
         (json, "}},"); let _ = write! (json, "\"sig\":{{"); let _ = write!
         (json, "\"rssi\":{},", parsed.rssi); let _ = write!
         (json, "\"snr\":{}", parsed.snr); let _ = write! (json, "}},"); let _
@@ -250,24 +251,17 @@
         new(dp.USART2, (vcp_tx, vcp_rx), SerialConfig ::
         default().baudrate(115200.bps()), & mut rcc,).unwrap(); defmt :: info!
         ("USART2 VCP initialized at 115200 baud"); defmt :: info!
-        ("Initializing BMP280 sensor..."); let bmp = match BMP280 ::
-        new(bus.acquire_i2c())
-        {
-            Ok(sensor) =>
-            { defmt :: info! ("BMP280 found at 0x76!"); Some(sensor) } Err(_)
-            =>
-            {
-                defmt :: warn!
-                ("BMP280 not found - continuing as bridge without local sensor");
-                None
-            }
-        }; let mut timer = dp.TIM2.counter_hz(& mut rcc);
-        timer.start(2.Hz()).unwrap(); timer.listen(Event :: Update);
+        ("Initializing SHT3x sensor..."); let sht_delay =
+        dp.TIM5.delay_us(& mut rcc); let sht3x_sensor = SHT3x ::
+        new(bus.acquire_i2c(), sht_delay, ShtAddress :: Low); defmt :: info!
+        ("SHT3x initialized at 0x44"); let mut timer =
+        dp.TIM2.counter_hz(& mut rcc); timer.start(2.Hz()).unwrap();
+        timer.listen(Event :: Update);
         (Shared
         {
             lora_uart, vcp_uart, display, last_packet : None, packets_received
-            : 0, crc_errors : 0, bmp280 : bmp, gateway_temp : None,
-            gateway_pressure : None, uptime_ms : 0,
+            : 0, crc_errors : 0, sht3x : Some(sht3x_sensor), sht3x_skip_reads
+            : 4, gateway_temp : None, gateway_humidity : None, uptime_ms : 0,
         }, Local { led, timer, rx_buffer : Vec :: new(), }, init ::
         Monotonics(),)
     } #[doc = " User HW task: tim2_handler"] #[allow(non_snake_case)] fn
@@ -276,21 +270,30 @@
         use rtic :: Mutex as _; use rtic :: mutex :: prelude :: * ;
         cx.local.timer.clear_flags(stm32f4xx_hal :: timer :: Flag :: Update);
         cx.local.led.toggle();
-        cx.shared.uptime_ms.lock(| uptime | * uptime += 500);
-        cx.shared.bmp280.lock(| bmp_opt |
+        cx.shared.uptime_ms.lock(| uptime | * uptime += 500); let should_read
+        =
+        cx.shared.sht3x_skip_reads.lock(| skip |
+        { if * skip > 0 { * skip -= 1; false } else { true } }); if
+        should_read
         {
-            if let Some(bmp) = bmp_opt
+            cx.shared.sht3x.lock(| sht_opt |
             {
-                let temp = bmp.temp() as f32; let pressure = bmp.pressure() as
-                f32; let pressure_hpa = pressure / 100.0;
-                cx.shared.gateway_temp.lock(| t | * t = Some(temp));
-                cx.shared.gateway_pressure.lock(| p | * p =
-                Some(pressure_hpa)); defmt :: debug!
-                ("BMP280 read: T={}°C, P={}hPa", temp, pressure_hpa);
-            }
-        }); let packet_copy =
-        cx.shared.last_packet.lock(| pkt_opt | * pkt_opt); let total_count =
-        cx.shared.packets_received.lock(| count | * count); defmt :: info!
+                if let Some(sht) = sht_opt
+                {
+                    if let Ok(measurement) = sht.measure(Repeatability :: High)
+                    {
+                        let temp = measurement.temperature as f32 / 100.0; let
+                        humidity = measurement.humidity as f32 / 100.0;
+                        cx.shared.gateway_temp.lock(| t | * t = Some(temp));
+                        cx.shared.gateway_humidity.lock(| h | * h = Some(humidity));
+                        defmt :: info!
+                        ("SHT3x read: T={}°C, H={}%", temp, humidity);
+                    }
+                }
+            });
+        } let packet_copy = cx.shared.last_packet.lock(| pkt_opt | * pkt_opt);
+        let total_count = cx.shared.packets_received.lock(| count | * count);
+        defmt :: info!
         ("N2 Timer: total_count={}, has_packet={}", total_count,
         packet_copy.is_some()); if let Some(parsed) = packet_copy
         {
@@ -370,10 +373,10 @@
                 timestamp = cx.shared.uptime_ms.lock(| t | * t); let total =
                 cx.shared.packets_received.lock(| c | * c); let errors =
                 cx.shared.crc_errors.lock(| e | * e); let gw_temp =
-                cx.shared.gateway_temp.lock(| t | * t); let gw_press =
-                cx.shared.gateway_pressure.lock(| p | * p); let json =
+                cx.shared.gateway_temp.lock(| t | * t); let gw_humidity =
+                cx.shared.gateway_humidity.lock(| h | * h); let json =
                 format_json_telemetry(& parsed, timestamp, total, errors,
-                gw_temp, gw_press);
+                gw_temp, gw_humidity);
                 cx.shared.vcp_uart.lock(| uart |
                 {
                     for byte in json.as_bytes()
@@ -389,9 +392,9 @@
     {
         lora_uart : Serial < pac :: UART4 > , vcp_uart : Serial < pac ::
         USART2 > , display : LoraDisplay, last_packet : Option < ParsedMessage
-        > , packets_received : u32, crc_errors : u32, bmp280 : Option < BMP280
-        < I2cProxy > > , gateway_temp : Option < f32 > , gateway_pressure :
-        Option < f32 > , uptime_ms : u32,
+        > , packets_received : u32, crc_errors : u32, sht3x : Option < SHT3x <
+        I2cProxy, ShtDelay > > , sht3x_skip_reads : u8, gateway_temp : Option
+        < f32 > , gateway_humidity : Option < f32 > , uptime_ms : u32,
     } #[doc = " RTIC local resource struct"] struct Local
     {
         led : Pin < 'A', 5, Output > , timer : CounterHz < pac :: TIM2 > ,
@@ -479,11 +482,20 @@
             #[inline(always)] pub unsafe fn priority(& self) -> & Priority
             { self.priority }
         } #[doc(hidden)] #[allow(non_camel_case_types)] pub struct
-        bmp280_that_needs_to_be_locked < 'a > { priority : & 'a Priority, }
-        impl < 'a > bmp280_that_needs_to_be_locked < 'a >
+        sht3x_that_needs_to_be_locked < 'a > { priority : & 'a Priority, }
+        impl < 'a > sht3x_that_needs_to_be_locked < 'a >
         {
             #[inline(always)] pub unsafe fn new(priority : & 'a Priority) ->
-            Self { bmp280_that_needs_to_be_locked { priority } }
+            Self { sht3x_that_needs_to_be_locked { priority } }
+            #[inline(always)] pub unsafe fn priority(& self) -> & Priority
+            { self.priority }
+        } #[doc(hidden)] #[allow(non_camel_case_types)] pub struct
+        sht3x_skip_reads_that_needs_to_be_locked < 'a >
+        { priority : & 'a Priority, } impl < 'a >
+        sht3x_skip_reads_that_needs_to_be_locked < 'a >
+        {
+            #[inline(always)] pub unsafe fn new(priority : & 'a Priority) ->
+            Self { sht3x_skip_reads_that_needs_to_be_locked { priority } }
             #[inline(always)] pub unsafe fn priority(& self) -> & Priority
             { self.priority }
         } #[doc(hidden)] #[allow(non_camel_case_types)] pub struct
@@ -496,12 +508,12 @@
             #[inline(always)] pub unsafe fn priority(& self) -> & Priority
             { self.priority }
         } #[doc(hidden)] #[allow(non_camel_case_types)] pub struct
-        gateway_pressure_that_needs_to_be_locked < 'a >
+        gateway_humidity_that_needs_to_be_locked < 'a >
         { priority : & 'a Priority, } impl < 'a >
-        gateway_pressure_that_needs_to_be_locked < 'a >
+        gateway_humidity_that_needs_to_be_locked < 'a >
         {
             #[inline(always)] pub unsafe fn new(priority : & 'a Priority) ->
-            Self { gateway_pressure_that_needs_to_be_locked { priority } }
+            Self { gateway_humidity_that_needs_to_be_locked { priority } }
             #[inline(always)] pub unsafe fn priority(& self) -> & Priority
             { self.priority }
         } #[doc(hidden)] #[allow(non_camel_case_types)] pub struct
@@ -537,17 +549,20 @@
         pub packets_received : shared_resources ::
         packets_received_that_needs_to_be_locked < 'a > ,
         #[doc =
-        " Resource proxy resource `bmp280`. Use method `.lock()` to gain access"]
-        pub bmp280 : shared_resources :: bmp280_that_needs_to_be_locked < 'a >
-        ,
+        " Resource proxy resource `sht3x`. Use method `.lock()` to gain access"]
+        pub sht3x : shared_resources :: sht3x_that_needs_to_be_locked < 'a > ,
+        #[doc =
+        " Resource proxy resource `sht3x_skip_reads`. Use method `.lock()` to gain access"]
+        pub sht3x_skip_reads : shared_resources ::
+        sht3x_skip_reads_that_needs_to_be_locked < 'a > ,
         #[doc =
         " Resource proxy resource `gateway_temp`. Use method `.lock()` to gain access"]
         pub gateway_temp : shared_resources ::
         gateway_temp_that_needs_to_be_locked < 'a > ,
         #[doc =
-        " Resource proxy resource `gateway_pressure`. Use method `.lock()` to gain access"]
-        pub gateway_pressure : shared_resources ::
-        gateway_pressure_that_needs_to_be_locked < 'a > ,
+        " Resource proxy resource `gateway_humidity`. Use method `.lock()` to gain access"]
+        pub gateway_humidity : shared_resources ::
+        gateway_humidity_that_needs_to_be_locked < 'a > ,
         #[doc =
         " Resource proxy resource `uptime_ms`. Use method `.lock()` to gain access"]
         pub uptime_ms : shared_resources :: uptime_ms_that_needs_to_be_locked
@@ -614,9 +629,9 @@
         pub gateway_temp : shared_resources ::
         gateway_temp_that_needs_to_be_locked < 'a > ,
         #[doc =
-        " Resource proxy resource `gateway_pressure`. Use method `.lock()` to gain access"]
-        pub gateway_pressure : shared_resources ::
-        gateway_pressure_that_needs_to_be_locked < 'a > ,
+        " Resource proxy resource `gateway_humidity`. Use method `.lock()` to gain access"]
+        pub gateway_humidity : shared_resources ::
+        gateway_humidity_that_needs_to_be_locked < 'a > ,
         #[doc =
         " Resource proxy resource `uptime_ms`. Use method `.lock()` to gain access"]
         pub uptime_ms : shared_resources :: uptime_ms_that_needs_to_be_locked
@@ -768,26 +783,46 @@
         }
     } #[allow(non_camel_case_types)] #[allow(non_upper_case_globals)]
     #[doc(hidden)] #[link_section = ".uninit.rtic6"] static
-    __rtic_internal_shared_resource_bmp280 : rtic :: RacyCell < core :: mem ::
-    MaybeUninit < Option < BMP280 < I2cProxy > > >> = rtic :: RacyCell ::
-    new(core :: mem :: MaybeUninit :: uninit()); impl < 'a > rtic :: Mutex for
-    shared_resources :: bmp280_that_needs_to_be_locked < 'a >
+    __rtic_internal_shared_resource_sht3x : rtic :: RacyCell < core :: mem ::
+    MaybeUninit < Option < SHT3x < I2cProxy, ShtDelay > > >> = rtic ::
+    RacyCell :: new(core :: mem :: MaybeUninit :: uninit()); impl < 'a > rtic
+    :: Mutex for shared_resources :: sht3x_that_needs_to_be_locked < 'a >
     {
-        type T = Option < BMP280 < I2cProxy > > ; #[inline(always)] fn lock <
-        RTIC_INTERNAL_R >
-        (& mut self, f : impl FnOnce(& mut Option < BMP280 < I2cProxy > >) ->
+        type T = Option < SHT3x < I2cProxy, ShtDelay > > ; #[inline(always)]
+        fn lock < RTIC_INTERNAL_R >
+        (& mut self, f : impl
+        FnOnce(& mut Option < SHT3x < I2cProxy, ShtDelay > >) ->
         RTIC_INTERNAL_R) -> RTIC_INTERNAL_R
         {
             #[doc = r" Priority ceiling"] const CEILING : u8 = 1u8; unsafe
             {
                 rtic :: export ::
-                lock(__rtic_internal_shared_resource_bmp280.get_mut() as * mut
+                lock(__rtic_internal_shared_resource_sht3x.get_mut() as * mut
                 _, self.priority(), CEILING, stm32f4xx_hal :: pac ::
                 NVIC_PRIO_BITS, & __rtic_internal_MASKS, f,)
             }
         }
     } #[allow(non_camel_case_types)] #[allow(non_upper_case_globals)]
     #[doc(hidden)] #[link_section = ".uninit.rtic7"] static
+    __rtic_internal_shared_resource_sht3x_skip_reads : rtic :: RacyCell < core
+    :: mem :: MaybeUninit < u8 >> = rtic :: RacyCell ::
+    new(core :: mem :: MaybeUninit :: uninit()); impl < 'a > rtic :: Mutex for
+    shared_resources :: sht3x_skip_reads_that_needs_to_be_locked < 'a >
+    {
+        type T = u8; #[inline(always)] fn lock < RTIC_INTERNAL_R >
+        (& mut self, f : impl FnOnce(& mut u8) -> RTIC_INTERNAL_R) ->
+        RTIC_INTERNAL_R
+        {
+            #[doc = r" Priority ceiling"] const CEILING : u8 = 1u8; unsafe
+            {
+                rtic :: export ::
+                lock(__rtic_internal_shared_resource_sht3x_skip_reads.get_mut()
+                as * mut _, self.priority(), CEILING, stm32f4xx_hal :: pac ::
+                NVIC_PRIO_BITS, & __rtic_internal_MASKS, f,)
+            }
+        }
+    } #[allow(non_camel_case_types)] #[allow(non_upper_case_globals)]
+    #[doc(hidden)] #[link_section = ".uninit.rtic8"] static
     __rtic_internal_shared_resource_gateway_temp : rtic :: RacyCell < core ::
     mem :: MaybeUninit < Option < f32 > >> = rtic :: RacyCell ::
     new(core :: mem :: MaybeUninit :: uninit()); impl < 'a > rtic :: Mutex for
@@ -807,11 +842,11 @@
             }
         }
     } #[allow(non_camel_case_types)] #[allow(non_upper_case_globals)]
-    #[doc(hidden)] #[link_section = ".uninit.rtic8"] static
-    __rtic_internal_shared_resource_gateway_pressure : rtic :: RacyCell < core
+    #[doc(hidden)] #[link_section = ".uninit.rtic9"] static
+    __rtic_internal_shared_resource_gateway_humidity : rtic :: RacyCell < core
     :: mem :: MaybeUninit < Option < f32 > >> = rtic :: RacyCell ::
     new(core :: mem :: MaybeUninit :: uninit()); impl < 'a > rtic :: Mutex for
-    shared_resources :: gateway_pressure_that_needs_to_be_locked < 'a >
+    shared_resources :: gateway_humidity_that_needs_to_be_locked < 'a >
     {
         type T = Option < f32 > ; #[inline(always)] fn lock < RTIC_INTERNAL_R
         >
@@ -821,13 +856,13 @@
             #[doc = r" Priority ceiling"] const CEILING : u8 = 1u8; unsafe
             {
                 rtic :: export ::
-                lock(__rtic_internal_shared_resource_gateway_pressure.get_mut()
+                lock(__rtic_internal_shared_resource_gateway_humidity.get_mut()
                 as * mut _, self.priority(), CEILING, stm32f4xx_hal :: pac ::
                 NVIC_PRIO_BITS, & __rtic_internal_MASKS, f,)
             }
         }
     } #[allow(non_camel_case_types)] #[allow(non_upper_case_globals)]
-    #[doc(hidden)] #[link_section = ".uninit.rtic9"] static
+    #[doc(hidden)] #[link_section = ".uninit.rtic10"] static
     __rtic_internal_shared_resource_uptime_ms : rtic :: RacyCell < core :: mem
     :: MaybeUninit < u32 >> = rtic :: RacyCell ::
     new(core :: mem :: MaybeUninit :: uninit()); impl < 'a > rtic :: Mutex for
@@ -856,17 +891,17 @@
     stm32f4xx_hal :: pac :: Interrupt :: UART4 as u32]), rtic :: export ::
     create_mask([]), rtic :: export :: create_mask([])];
     #[allow(non_camel_case_types)] #[allow(non_upper_case_globals)]
-    #[doc(hidden)] #[link_section = ".uninit.rtic10"] static
+    #[doc(hidden)] #[link_section = ".uninit.rtic11"] static
     __rtic_internal_local_resource_led : rtic :: RacyCell < core :: mem ::
     MaybeUninit < Pin < 'A', 5, Output > >> = rtic :: RacyCell ::
     new(core :: mem :: MaybeUninit :: uninit());
     #[allow(non_camel_case_types)] #[allow(non_upper_case_globals)]
-    #[doc(hidden)] #[link_section = ".uninit.rtic11"] static
+    #[doc(hidden)] #[link_section = ".uninit.rtic12"] static
     __rtic_internal_local_resource_timer : rtic :: RacyCell < core :: mem ::
     MaybeUninit < CounterHz < pac :: TIM2 > >> = rtic :: RacyCell ::
     new(core :: mem :: MaybeUninit :: uninit());
     #[allow(non_camel_case_types)] #[allow(non_upper_case_globals)]
-    #[doc(hidden)] #[link_section = ".uninit.rtic12"] static
+    #[doc(hidden)] #[link_section = ".uninit.rtic13"] static
     __rtic_internal_local_resource_rx_buffer : rtic :: RacyCell < core :: mem
     :: MaybeUninit < Vec < u8, RX_BUFFER_SIZE > >> = rtic :: RacyCell ::
     new(core :: mem :: MaybeUninit :: uninit()); #[allow(non_snake_case)]
@@ -906,12 +941,14 @@
                 last_packet_that_needs_to_be_locked :: new(priority),
                 #[doc(hidden)] packets_received : shared_resources ::
                 packets_received_that_needs_to_be_locked :: new(priority),
-                #[doc(hidden)] bmp280 : shared_resources ::
-                bmp280_that_needs_to_be_locked :: new(priority),
+                #[doc(hidden)] sht3x : shared_resources ::
+                sht3x_that_needs_to_be_locked :: new(priority), #[doc(hidden)]
+                sht3x_skip_reads : shared_resources ::
+                sht3x_skip_reads_that_needs_to_be_locked :: new(priority),
                 #[doc(hidden)] gateway_temp : shared_resources ::
                 gateway_temp_that_needs_to_be_locked :: new(priority),
-                #[doc(hidden)] gateway_pressure : shared_resources ::
-                gateway_pressure_that_needs_to_be_locked :: new(priority),
+                #[doc(hidden)] gateway_humidity : shared_resources ::
+                gateway_humidity_that_needs_to_be_locked :: new(priority),
                 #[doc(hidden)] uptime_ms : shared_resources ::
                 uptime_ms_that_needs_to_be_locked :: new(priority),
             }
@@ -956,8 +993,8 @@
                 crc_errors_that_needs_to_be_locked :: new(priority),
                 #[doc(hidden)] gateway_temp : shared_resources ::
                 gateway_temp_that_needs_to_be_locked :: new(priority),
-                #[doc(hidden)] gateway_pressure : shared_resources ::
-                gateway_pressure_that_needs_to_be_locked :: new(priority),
+                #[doc(hidden)] gateway_humidity : shared_resources ::
+                gateway_humidity_that_needs_to_be_locked :: new(priority),
                 #[doc(hidden)] uptime_ms : shared_resources ::
                 uptime_ms_that_needs_to_be_locked :: new(priority),
             }
@@ -971,12 +1008,12 @@
             rtic :: export :: assert_send :: < LoraDisplay > (); rtic ::
             export :: assert_send :: < Option < ParsedMessage > > (); rtic ::
             export :: assert_send :: < u32 > (); rtic :: export :: assert_send
-            :: < Option < BMP280 < I2cProxy > > > (); rtic :: export ::
-            assert_send :: < Option < f32 > > (); rtic :: export ::
-            assert_send :: < Pin < 'A', 5, Output > > (); rtic :: export ::
-            assert_send :: < CounterHz < pac :: TIM2 > > (); rtic :: export ::
-            assert_send :: < Vec < u8, RX_BUFFER_SIZE > > (); const
-            _CONST_CHECK : () =
+            :: < Option < SHT3x < I2cProxy, ShtDelay > > > (); rtic :: export
+            :: assert_send :: < u8 > (); rtic :: export :: assert_send :: <
+            Option < f32 > > (); rtic :: export :: assert_send :: < Pin < 'A',
+            5, Output > > (); rtic :: export :: assert_send :: < CounterHz <
+            pac :: TIM2 > > (); rtic :: export :: assert_send :: < Vec < u8,
+            RX_BUFFER_SIZE > > (); const _CONST_CHECK : () =
             {
                 if ! rtic :: export :: have_basepri()
                 {
@@ -1035,13 +1072,16 @@
                 new(shared_resources.packets_received));
                 __rtic_internal_shared_resource_crc_errors.get_mut().write(core
                 :: mem :: MaybeUninit :: new(shared_resources.crc_errors));
-                __rtic_internal_shared_resource_bmp280.get_mut().write(core ::
-                mem :: MaybeUninit :: new(shared_resources.bmp280));
+                __rtic_internal_shared_resource_sht3x.get_mut().write(core ::
+                mem :: MaybeUninit :: new(shared_resources.sht3x));
+                __rtic_internal_shared_resource_sht3x_skip_reads.get_mut().write(core
+                :: mem :: MaybeUninit ::
+                new(shared_resources.sht3x_skip_reads));
                 __rtic_internal_shared_resource_gateway_temp.get_mut().write(core
                 :: mem :: MaybeUninit :: new(shared_resources.gateway_temp));
-                __rtic_internal_shared_resource_gateway_pressure.get_mut().write(core
+                __rtic_internal_shared_resource_gateway_humidity.get_mut().write(core
                 :: mem :: MaybeUninit ::
-                new(shared_resources.gateway_pressure));
+                new(shared_resources.gateway_humidity));
                 __rtic_internal_shared_resource_uptime_ms.get_mut().write(core
                 :: mem :: MaybeUninit :: new(shared_resources.uptime_ms));
                 __rtic_internal_local_resource_led.get_mut().write(core :: mem

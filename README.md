@@ -1,24 +1,36 @@
-# Week 7: MQTT + InfluxDB Integration
+# Week 7+8: MQTT + InfluxDB + Grafana
 
-![Week 7](image.png)
-**Async Rust gateway service with MQTT and time-series database publishing**
+![Week 7+8](image.png)
+**Complete IoT telemetry pipeline with real-time messaging, time-series storage, and visualization**
+
+**Combined Project**: Week 7 (MQTT + InfluxDB) + Week 8 (Grafana) = Complete Phase 2
 
 ---
 
 ## Overview
 
-Week 7 extends the Week 6 async gateway to publish sensor telemetry to:
+This project implements a complete IoT telemetry pipeline:
 
-- **MQTT broker** (Mosquitto) for real-time monitoring
+- **MQTT broker** (Mosquitto) for real-time messaging
 - **InfluxDB 2.x** for time-series storage and analysis
+- **Grafana** for visualization and dashboards
 
-**Current Status**: ✅ **COMPLETE** - Fully tested with live hardware
+**Current Status**: ✅ **Phase 2 COMPLETE**
 
-- ✅ Docker infrastructure (Mosquitto + InfluxDB)
+**Week 7:**
+
+- ✅ Docker infrastructure (Mosquitto + InfluxDB + Grafana)
 - ✅ MQTT client with telemetry publishing
-- ✅ InfluxDB integration (Phase 5-6)
+- ✅ InfluxDB integration
 - ✅ Live hardware testing
-- 🔲 Advanced features (resilience, batching, dashboards)
+
+**Week 8:**
+
+- ✅ Grafana added to Docker Compose
+- ✅ InfluxDB data source configured
+- 🔄 Dashboard creation (in progress)
+- 🔲 Alert rules
+- 🔲 Chaos testing
 
 ---
 
@@ -33,10 +45,10 @@ Week 7 extends the Week 6 async gateway to publish sensor telemetry to:
 ### 1. Start Infrastructure
 
 ```bash
-# Start Mosquitto and InfluxDB
+# Start Mosquitto, InfluxDB, and Grafana
 docker compose up -d
 
-# Verify running
+# Verify running (should see 3 containers)
 docker compose ps
 ```
 
@@ -66,7 +78,7 @@ You should see telemetry messages every ~10 seconds on MQTT topics and data flow
 ```
 Node 1 (STM32) ──LoRa──> Node 2 (STM32) ──USB/RTT──> probe-rs ──stdout──>
     Gateway Service ──MQTT──> Mosquitto
-                    └──HTTP──> InfluxDB
+                    └──HTTP──> InfluxDB ──Query──> Grafana (dashboards)
 ```
 
 **Gateway publishes to MQTT topics**:
@@ -132,6 +144,14 @@ export INFLUXDB_TOKEN="your-token-here"
 - **Credentials**: admin / admin123456
 - **Auto-initialized**: org=my-org, bucket=telemetry
 
+### Grafana (Week 8)
+
+- **Port**: 3000
+- **UI**: http://localhost:3000
+- **Credentials**: admin / admin
+- **Data source**: InfluxDB (configure via UI)
+- **Guide**: See GRAFANA_SETUP_GUIDE.md
+
 ---
 
 ## Testing MQTT
@@ -164,18 +184,22 @@ docker run --rm --network wk7-mqtt-influx_iiot-network \
 ```
 wk7-mqtt-influx/
 ├── src/
-│   ├── main.rs           # Gateway service
-│   ├── config.rs         # Configuration loading
-│   └── mqtt.rs           # MQTT client
-├── docker-compose.yml    # Mosquitto + InfluxDB
-├── config.toml           # Runtime configuration
+│   ├── main.rs              # Gateway service
+│   ├── config.rs            # Configuration loading
+│   ├── mqtt.rs              # MQTT client
+│   └── influxdb.rs          # InfluxDB client
+├── docker-compose.yml       # Mosquitto + InfluxDB + Grafana
+├── config.toml              # Runtime configuration
 ├── mosquitto/
 │   └── config/
 │       └── mosquitto.conf
-├── test-mqtt-sub.sh      # MQTT test helper
-├── NOTES.md              # Technical learnings
-├── TROUBLESHOOTING.md    # Common issues
-└── TODO.md               # Project progress
+├── test-mqtt-sub.sh         # MQTT test helper
+├── test-grafana-influx.sh   # Grafana integration test
+├── GRAFANA_SETUP_GUIDE.md   # Week 8 Grafana setup
+├── MQTT_INFLUX_GUIDE.md     # Week 7 comprehensive guide
+├── NOTES.md                 # Technical learnings
+├── TROUBLESHOOTING.md       # Common issues
+└── TODO.md                  # Project progress
 ```
 
 ---
@@ -248,13 +272,14 @@ docker compose logs
 - [Week 6 Gateway](../wk6-async-gateway/) - Base async gateway
 - [rumqttc Documentation](https://docs.rs/rumqttc/)
 - [InfluxDB 2.x Docs](https://docs.influxdata.com/influxdb/v2/)
+- [Grafana Documentation](https://grafana.com/docs/)
 - [Mosquitto](https://mosquitto.org/)
 
 ---
 
 _Part of the 12-Week IIoT Systems Engineer Transition Plan_
-_Week 7 of 12 - MQTT + InfluxDB Integration_
+_Week 7+8 of 12 - Complete Phase 2: MQTT + InfluxDB + Grafana_
 
 **Author**: Antony (Tony) Mapfumo
 **Date**: December 2025
-**Status**: Phase 3 Complete (30%)
+**Status**: Phase 2 In Progress (Week 8)

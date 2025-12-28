@@ -50,12 +50,12 @@ struct Node1Data {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Node2Data {
-    /// Temperature in °C (optional, BMP280 may not be reading yet)
+    /// Temperature in °C (optional, SHT3x may not be reading yet)
     #[serde(skip_serializing_if = "Option::is_none")]
     t: Option<f32>,
-    /// Pressure in hPa (optional)
+    /// Humidity in % (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
-    p: Option<f32>,
+    h: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,11 +187,11 @@ async fn process_telemetry(
         );
 
         // Log Node 2 (gateway local sensor) data if available
-        if packet.n2.t.is_some() || packet.n2.p.is_some() {
+        if packet.n2.t.is_some() || packet.n2.h.is_some() {
             info!(
                 n2_temperature = ?packet.n2.t,
-                n2_pressure = ?packet.n2.p,
-                "Gateway local sensor (BMP280)"
+                n2_humidity = ?packet.n2.h,
+                "Gateway local sensor (SHT3x)"
             );
         }
 
@@ -226,15 +226,15 @@ async fn publish_telemetry_to_mqtt(
         .publish_sensor(prefix, "node1", "gas_resistance", &packet.n1.g.to_string(), true)
         .await?;
 
-    // Node 2 sensors (gateway local sensor - BMP280)
+    // Node 2 sensors (gateway local sensor - SHT3x)
     if let Some(temp) = packet.n2.t {
         mqtt_client
             .publish_sensor(prefix, "node2", "temperature", &temp.to_string(), true)
             .await?;
     }
-    if let Some(pressure) = packet.n2.p {
+    if let Some(humidity) = packet.n2.h {
         mqtt_client
-            .publish_sensor(prefix, "node2", "pressure", &pressure.to_string(), true)
+            .publish_sensor(prefix, "node2", "humidity", &humidity.to_string(), true)
             .await?;
     }
 
@@ -274,15 +274,15 @@ async fn write_telemetry_to_influxdb(
         .write_sensor("gas_resistance", packet.n1.g as f64, "node1", Some("ohms"))
         .await?;
 
-    // Node 2 sensors (gateway local sensor - BMP280)
+    // Node 2 sensors (gateway local sensor - SHT3x)
     if let Some(temp) = packet.n2.t {
         influxdb_client
             .write_sensor("temperature", temp as f64, "node2", Some("celsius"))
             .await?;
     }
-    if let Some(pressure) = packet.n2.p {
+    if let Some(humidity) = packet.n2.h {
         influxdb_client
-            .write_sensor("pressure", pressure as f64, "node2", Some("hpa"))
+            .write_sensor("humidity", humidity as f64, "node2", Some("percent"))
             .await?;
     }
 

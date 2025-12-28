@@ -1,6 +1,8 @@
-# Week 7 Quick Start Guide
+# Week 7+8 Quick Start Guide
 
-**5-minute setup for MQTT + InfluxDB telemetry gateway**
+## 5-minute setup for MQTT + InfluxDB + Grafana telemetry pipeline
+
+Combined: Week 7 (MQTT + InfluxDB) + Week 8 (Grafana) = Complete Phase 2
 
 ---
 
@@ -24,17 +26,18 @@ lsusb | grep STMicro
 ```bash
 cd wk7-mqtt-influx
 
-# Start MQTT + InfluxDB
+# Start MQTT + InfluxDB + Grafana
 docker compose up -d
 
-# Verify running (should see 2 containers)
+# Verify running (should see 3 containers)
 docker compose ps
 ```
 
 Expected output:
 ```
-wk7-influxdb    influxdb:2            Up   0.0.0.0:8086->8086/tcp
-wk7-mosquitto   eclipse-mosquitto:2   Up   0.0.0.0:1883->1883/tcp
+wk7-grafana     grafana/grafana:latest   Up   0.0.0.0:3000->3000/tcp
+wk7-influxdb    influxdb:2              Up   0.0.0.0:8086->8086/tcp
+wk7-mosquitto   eclipse-mosquitto:2     Up   0.0.0.0:1883->1883/tcp
 ```
 
 ---
@@ -108,6 +111,20 @@ Password: admin123456
 
 # Navigate to: Data Explorer → Bucket: telemetry
 # You should see 8 measurements with live data
+```
+
+### Check Grafana UI (Week 8)
+
+```bash
+# Open browser
+open http://localhost:3000
+
+# Login
+Username: admin
+Password: admin
+
+# First time: Configure InfluxDB data source
+# See GRAFANA_SETUP_GUIDE.md for detailed steps
 ```
 
 ---
@@ -187,7 +204,8 @@ cargo build --release     # Build optimized gateway
 
 ## Documentation
 
-- **MQTT_INFLUX_GUIDE.md** - Comprehensive tutorial
+- **GRAFANA_SETUP_GUIDE.md** - Grafana configuration (Week 8)
+- **MQTT_INFLUX_GUIDE.md** - MQTT + InfluxDB tutorial (Week 7)
 - **FINAL_SUMMARY.md** - Complete session summary
 - **TROUBLESHOOTING.md** - Detailed troubleshooting
 - **README.md** - Full project documentation
@@ -196,11 +214,13 @@ cargo build --release     # Build optimized gateway
 
 ## Next Steps
 
-1. **View data in InfluxDB UI** - Create queries, dashboards
-2. **Monitor MQTT topics** - Connect your own applications
-3. **Explore the code** - See how MQTT + InfluxDB integration works
-4. **Read MQTT_INFLUX_GUIDE.md** - Understand the architecture
+1. **Configure Grafana data source** - See GRAFANA_SETUP_GUIDE.md
+2. **Create dashboards** - Visualize live sensor telemetry
+3. **View data in InfluxDB UI** - Create queries, explore measurements
+4. **Monitor MQTT topics** - Connect your own applications
+5. **Explore the code** - See how MQTT + InfluxDB integration works
+6. **Read MQTT_INFLUX_GUIDE.md** - Understand the architecture
 
 ---
 
-**That's it!** You now have a complete IoT telemetry pipeline publishing to both MQTT and InfluxDB.
+**That's it!** You now have a complete IoT telemetry pipeline with MQTT, InfluxDB, and Grafana visualization.
