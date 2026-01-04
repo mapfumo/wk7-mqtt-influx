@@ -764,8 +764,6 @@ This project demonstrates **industry-standard IoT architecture**:
 - ✅ **Grafana**: Dashboard design, Flux queries, visualization
 - ✅ **System integration**: End-to-end data pipeline
 
-**This is resume-ready IoT engineering experience.**
-
 ---
 
 ## References
